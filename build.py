@@ -19,7 +19,7 @@ TZ = ZoneInfo(os.environ.get("TZ_NAME", "America/Chicago"))
 SITE_URL = os.environ.get("SITE_URL", "https://samueljaythomas.github.io/nffc-fpl/")
 
 # If you saved a .jpg instead of a .png, change this one line.
-CREST_FILE = "crest.jpeg"
+CREST_FILE = "IMG_8605.jpeg"
 
 SEGMENTS = [
     ("Segment 1", 1, 10),
