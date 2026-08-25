@@ -291,14 +291,22 @@ season_order = [e for r, e, p in ranked(totals_for(1, 38)[0])] if played \
 team_options = "".join(f'<option value="{e}">{names[e]}</option>'
                        for e in season_order)
 seg_options = "".join(
-    f'<option value="{i}"{" selected" if current and SEGMENTS[i] is current else ""}>'
+    f'<option value="seg:{i}"'
+    f'{" selected" if current and SEGMENTS[i] is current else ""}>'
     f'{lab} &middot; GW{s}&ndash;{en}</option>'
     for i, (lab, s, en) in enumerate(SEGMENTS)
 )
+range_options = (
+    '<option value="last:5">Last 5 gameweeks</option>'
+    '<option value="last:10">Last 10 gameweeks</option>'
+    '<option value="all">Full season</option>'
+)
+seg_select = (f'<optgroup label="Award segments">{seg_options}</optgroup>'
+              f'<optgroup label="Rolling">{range_options}</optgroup>')
 
 trends_tab = (
     f'<div class="picker"><select id="teampick">{team_options}</select></div>'
-    f'<div class="picker"><select id="segpick">{seg_options}</select></div>'
+    f'<div class="picker"><select id="segpick">{seg_select}</select></div>'
     f'<section class="card"><div class="head">'
     f'<h2 id="charttitle">Scoring trend</h2>'
     f'<p id="chartsub">Weekly points</p></div>'
@@ -398,17 +406,40 @@ SCRIPT = """
     return a.reduce(function (x, y) { return x + y; }, 0) / a.length;
   }
 
+  function resolveView(v) {
+    if (v.indexOf('seg:') === 0) {
+      var s = DATA.segments[+v.slice(4)];
+      return {
+        gws: DATA.played.filter(function (g) { return g >= s[1] && g <= s[2]; }),
+        label: s[0], span: s[2] - s[1] + 1, kind: 'seg'
+      };
+    }
+    if (v.indexOf('last:') === 0) {
+      var n = +v.slice(5);
+      return {
+        gws: DATA.played.slice(-n),
+        label: 'Last ' + n + ' gameweeks', span: n, kind: 'roll'
+      };
+    }
+    return {
+      gws: DATA.played.slice(),
+      label: 'Full season', span: DATA.played.length, kind: 'all'
+    };
+  }
+
   function draw() {
     if (!host) return;
     var team = teamPick.value;
-    var seg = DATA.segments[+segPick.value];
-    var gws = DATA.played.filter(function (g) { return g >= seg[1] && g <= seg[2]; });
+    var view = resolveView(segPick.value);
+    var gws = view.gws;
 
     titleEl.textContent = DATA.names[team];
-    subEl.textContent = seg[0] + ' \u00b7 GW' + seg[1] + '\u2013' + seg[2];
+    subEl.textContent = gws.length
+      ? view.label + ' \u00b7 GW' + gws[0] + '\u2013' + gws[gws.length - 1]
+      : view.label;
 
     if (!gws.length) {
-      host.innerHTML = '<div class="empty">No gameweeks played in this segment yet</div>';
+      host.innerHTML = '<div class="empty">No gameweeks played in this range yet</div>';
       stats.innerHTML = '';
       return;
     }
@@ -458,14 +489,18 @@ SCRIPT = """
            'stroke-linejoin="round" stroke-linecap="round"/>';
     }
 
+    var dense = gws.length > 12;
     vals.forEach(function (v, i) {
       s += '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(v).toFixed(1) +
-           '" r="4" fill="#0b0d10" stroke="#e23539" stroke-width="2.4"/>';
-      s += '<text x="' + X(i).toFixed(1) + '" y="' + (Y(v) - 11).toFixed(1) +
-           '" class="pt" text-anchor="middle">' + v + '</text>';
+           '" r="' + (dense ? 2.6 : 4) + '" fill="#0b0d10" stroke="#e23539" ' +
+           'stroke-width="' + (dense ? 1.8 : 2.4) + '"/>';
+      if (!dense) {
+        s += '<text x="' + X(i).toFixed(1) + '" y="' + (Y(v) - 11).toFixed(1) +
+             '" class="pt" text-anchor="middle">' + v + '</text>';
+      }
     });
 
-    var every = gws.length > 7 ? 2 : 1;
+    var every = Math.ceil(gws.length / 8);
     gws.forEach(function (g, i) {
       if (i % every) return;
       s += '<text x="' + X(i).toFixed(1) + '" y="' + (H - 9) +
@@ -477,10 +512,14 @@ SCRIPT = """
 
     var diff = myAvg - lgAvg;
     var sign = diff >= 0 ? '+' : '';
+    var countTxt = view.kind === 'seg'
+      ? gws.length + ' of ' + view.span + ' GWs'
+      : gws.length + (gws.length === 1 ? ' gameweek' : ' gameweeks');
     stats.innerHTML =
-      '<div><span>Segment total</span><b>' +
+      '<div><span>' + (view.kind === 'seg' ? 'Segment total' : 'Total') +
+        '</span><b>' +
         vals.reduce(function (a, b) { return a + b; }, 0) +
-        '</b><em>' + gws.length + ' of ' + (seg[2] - seg[1] + 1) + ' GWs</em></div>' +
+        '</b><em>' + countTxt + '</em></div>' +
       '<div><span>Vs league avg</span><b class="' +
         (diff >= 0 ? 'up' : 'down') + '">' + sign + diff.toFixed(1) +
         '</b><em>' + myAvg.toFixed(1) + ' v ' + lgAvg.toFixed(1) + '</em></div>';
