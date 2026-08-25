@@ -37,12 +37,12 @@
   .stamp b { color: #e23539; font-weight: 600; }
 
   .tabs {
-    display: flex; gap: 5px; background: #14171d; border: 1px solid #262b36;
+    display: flex; gap: 4px; background: #14171d; border: 1px solid #262b36;
     border-radius: 12px; padding: 4px; margin-bottom: 16px;
   }
   .tab {
-    flex: 1; text-align: center; padding: 9px 4px; border-radius: 9px;
-    font-size: 13px; font-weight: 600; color: #8a93a6;
+    flex: 1; text-align: center; padding: 9px 2px; border-radius: 9px;
+    font-size: 12.5px; font-weight: 600; color: #8a93a6;
     border: none; background: none; cursor: pointer; font-family: inherit;
     -webkit-tap-highlight-color: transparent;
   }
@@ -50,14 +50,14 @@
   .pane { display: none; }
   .pane.on { display: block; }
 
-  .picker { position: relative; margin-bottom: 14px; }
+  .picker { position: relative; margin-bottom: 11px; }
   .picker::after {
     content: ""; position: absolute; right: 16px; top: 50%;
     width: 8px; height: 8px; border-right: 2px solid #8a93a6;
     border-bottom: 2px solid #8a93a6; transform: translateY(-70%) rotate(45deg);
     pointer-events: none;
   }
-  #gwpick {
+  .picker select {
     width: 100%; appearance: none; -webkit-appearance: none;
     background: #14171d; border: 1px solid #262b36; border-radius: 12px;
     color: #f4f6f9; font-size: 15px; font-weight: 600; font-family: inherit;
@@ -116,9 +116,7 @@
     padding: 13px 15px; border-bottom: 1px solid #1e222b;
   }
   .fx:last-of-type { border-bottom: none; }
-  .side {
-    flex: 1; display: flex; align-items: center; gap: 9px; min-width: 0;
-  }
+  .side { flex: 1; display: flex; align-items: center; gap: 9px; min-width: 0; }
   .side.r { justify-content: flex-end; }
   .side span {
     font-size: 13.5px; color: #8a93a6;
@@ -132,6 +130,24 @@
   .side.win b { color: #e23539; }
   .vs { font-size: 11px; color: #4e576b; flex: none; }
   .fx.up .side span { color: #c6cddb; }
+
+  .chart { display: block; width: 100%; height: auto; padding: 6px 4px 0; }
+  .chart .ax { fill: #7d879b; font-size: 10px;
+    font-family: -apple-system, sans-serif; }
+  .chart .pt { fill: #f4f6f9; font-size: 10.5px; font-weight: 700;
+    font-family: -apple-system, sans-serif; }
+  .empty { padding: 34px 18px; text-align: center; font-size: 13px; color: #8a93a6; }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 14px;
+    padding: 10px 17px 14px; border-top: 1px solid #262b36;
+  }
+  .legend span {
+    display: flex; align-items: center; gap: 6px; font-size: 11px; color: #8a93a6;
+  }
+  .legend i { display: block; width: 16px; height: 0; border-top-width: 2.5px; }
+  .k-line { border-top: 2.5px solid #e23539; }
+  .k-me { border-top: 2.5px dashed #f0b429; }
+  .k-lg { border-top: 2.5px dashed #7d879b; }
 
   .rec { display: flex; }
   .rec > div { flex: 1; padding: 14px 17px; }
@@ -151,6 +167,8 @@
     text-transform: uppercase; color: #8a93a6;
   }
   .rec2 b { display: block; font-size: 24px; font-weight: 800; margin: 3px 0 2px; }
+  .rec2 b.up { color: #37d67a; }
+  .rec2 b.down { color: #e23539; }
   .rec2 em {
     font-style: normal; font-size: 11px; color: #8a93a6;
     display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -166,41 +184,43 @@
 <div class="wrap">
   <div class="brand"><span class="mark"><img class="crest" src="IMG_8605.jpeg" alt=""></span>
     <span class="title">NFFC FPL</span></div>
-  <div class="stamp">Consistency tracker &middot; updated <b>Tue 25 Aug, 12:49 PM</b></div>
+  <div class="stamp">Consistency tracker &middot; updated <b>Tue 25 Aug, 1:05 PM</b></div>
 
   <div class="tabs">
     <button class="tab on" data-tab="segments">Segments</button>
     <button class="tab" data-tab="gameweek">Gameweek</button>
     <button class="tab" data-tab="season">Season</button>
+    <button class="tab" data-tab="trends">Trends</button>
   </div>
 
   <div class="pane on" data-pane="segments"><section class="card current"><div class="head"><span class="badge live">1/10</span><h2>Segment 1</h2><p>GW1&ndash;10</p></div><div class="row lead"><div class="rank">1</div><div class="who"><div class="team">Nottinghamburglars</div><div class="mgr">Sam Thomas &middot; 1-0-0</div></div><div class="val"><div class="pts">52</div><div class="sub">52.0/gw</div></div></div><div class="row"><div class="rank">2</div><div class="who"><div class="team">Angry Dragons</div><div class="mgr">Benjamin Earling &middot; 1-0-0</div></div><div class="val"><div class="pts">42</div><div class="sub">42.0/gw</div></div></div><div class="row"><div class="rank">3</div><div class="who"><div class="team">Notty Neighbors</div><div class="mgr">Andrew Thomas &middot; 0-0-1</div></div><div class="val"><div class="pts">38</div><div class="sub">38.0/gw</div></div></div><div class="row"><div class="rank">3</div><div class="who"><div class="team">Gunners</div><div class="mgr">Christopher Corbit &middot; 1-0-0</div></div><div class="val"><div class="pts">38</div><div class="sub">38.0/gw</div></div></div><div class="row"><div class="rank">5</div><div class="who"><div class="team">The Big Lewandowski</div><div class="mgr">Shashi Kambhampati &middot; 0-0-1</div></div><div class="val"><div class="pts">37</div><div class="sub">37.0/gw</div></div></div><div class="row"><div class="rank">5</div><div class="who"><div class="team">Geordie Generals</div><div class="mgr">Jamie Pickard &middot; 0-0-1</div></div><div class="val"><div class="pts">37</div><div class="sub">37.0/gw</div></div></div><div class="row"><div class="rank">5</div><div class="who"><div class="team">Team Vinnage</div><div class="mgr">Taylor Vinnage &middot; 1-0-0</div></div><div class="val"><div class="pts">37</div><div class="sub">37.0/gw</div></div></div><div class="row"><div class="rank">8</div><div class="who"><div class="team">Nott'm & Cheese</div><div class="mgr">Lara Thomas &middot; 0-0-1</div></div><div class="val"><div class="pts">36</div><div class="sub">36.0/gw</div></div></div></section><section class="card"><div class="head"><span class="badge muted">UPCOMING</span><h2>Segment 2</h2><p>GW11&ndash;20</p></div></section><section class="card"><div class="head"><span class="badge muted">UPCOMING</span><h2>Segment 3</h2><p>GW21&ndash;30</p></div></section><section class="card"><div class="head"><span class="badge muted">UPCOMING</span><h2>Segment 4</h2><p>GW31&ndash;38</p></div></section></div>
   <div class="pane" data-pane="gameweek"><div class="picker"><select id="gwpick"><option value="2">Gameweek 2 (upcoming)</option><option value="1" selected>Gameweek 1</option></select></div><div class="gwpanel" data-gw="1"><section class="card current"><div class="head"><span class="badge done">FINAL</span><h2>Gameweek 1</h2><p>Results</p></div><div class="fx"><div class="side"><span>Notty Neighbors</span><b>38</b></div><div class="vs">&ndash;</div><div class="side r win"><b>52</b><span>Nottinghamburglars</span></div></div><div class="fx"><div class="side win"><span>Gunners</span><b>38</b></div><div class="vs">&ndash;</div><div class="side r"><b>37</b><span>The Big Lewandowski</span></div></div><div class="fx"><div class="side"><span>Geordie Generals</span><b>37</b></div><div class="vs">&ndash;</div><div class="side r win"><b>42</b><span>Angry Dragons</span></div></div><div class="fx"><div class="side win"><span>Team Vinnage</span><b>37</b></div><div class="vs">&ndash;</div><div class="side r"><b>36</b><span>Nott'm & Cheese</span></div></div></section><section class="card"><div class="head"><h2>Standings</h2><p>Points scored this week</p></div><div class="row lead"><div class="rank">1</div><div class="who"><div class="team">Nottinghamburglars</div><div class="mgr">Sam Thomas</div></div><div class="val"><div class="pts">52</div><div class="sub">pts</div></div></div><div class="row"><div class="rank">2</div><div class="who"><div class="team">Angry Dragons</div><div class="mgr">Benjamin Earling</div></div><div class="val"><div class="pts">42</div><div class="sub">pts</div></div></div><div class="row"><div class="rank">3</div><div class="who"><div class="team">Notty Neighbors</div><div class="mgr">Andrew Thomas</div></div><div class="val"><div class="pts">38</div><div class="sub">pts</div></div></div><div class="row"><div class="rank">3</div><div class="who"><div class="team">Gunners</div><div class="mgr">Christopher Corbit</div></div><div class="val"><div class="pts">38</div><div class="sub">pts</div></div></div><div class="row"><div class="rank">5</div><div class="who"><div class="team">The Big Lewandowski</div><div class="mgr">Shashi Kambhampati</div></div><div class="val"><div class="pts">37</div><div class="sub">pts</div></div></div><div class="row"><div class="rank">5</div><div class="who"><div class="team">Geordie Generals</div><div class="mgr">Jamie Pickard</div></div><div class="val"><div class="pts">37</div><div class="sub">pts</div></div></div><div class="row"><div class="rank">5</div><div class="who"><div class="team">Team Vinnage</div><div class="mgr">Taylor Vinnage</div></div><div class="val"><div class="pts">37</div><div class="sub">pts</div></div></div><div class="row"><div class="rank">8</div><div class="who"><div class="team">Nott'm & Cheese</div><div class="mgr">Lara Thomas</div></div><div class="val"><div class="pts">36</div><div class="sub">pts</div></div></div></section><div class="rec2"><div><span>Top score</span><b>52</b><em>Nottinghamburglars</em></div><div><span>League average</span><b>39.6</b><em>across 8 teams</em></div></div></div><div class="gwpanel" data-gw="2"><section class="card"><div class="head"><span class="badge muted">UPCOMING</span><h2>Gameweek 2</h2><p>Fixtures</p></div><div class="fx up"><div class="side"><span>Nottinghamburglars</span></div><div class="vs">v</div><div class="side r"><span>Team Vinnage</span></div></div><div class="fx up"><div class="side"><span>Nott'm & Cheese</span></div><div class="vs">v</div><div class="side r"><span>Geordie Generals</span></div></div><div class="fx up"><div class="side"><span>Angry Dragons</span></div><div class="vs">v</div><div class="side r"><span>Gunners</span></div></div><div class="fx up"><div class="side"><span>The Big Lewandowski</span></div><div class="vs">v</div><div class="side r"><span>Notty Neighbors</span></div></div></section></div></div>
   <div class="pane" data-pane="season"><section class="card"><div class="head"><span class="badge muted">ALL</span><h2>Season total</h2><p>Through GW1</p></div><div class="row lead"><div class="rank">1</div><div class="who"><div class="team">Nottinghamburglars</div><div class="mgr">Sam Thomas &middot; 1-0-0</div></div><div class="val"><div class="pts">52</div><div class="sub">52.0/gw</div></div></div><div class="row"><div class="rank">2</div><div class="who"><div class="team">Angry Dragons</div><div class="mgr">Benjamin Earling &middot; 1-0-0</div></div><div class="val"><div class="pts">42</div><div class="sub">42.0/gw</div></div></div><div class="row"><div class="rank">3</div><div class="who"><div class="team">Notty Neighbors</div><div class="mgr">Andrew Thomas &middot; 0-0-1</div></div><div class="val"><div class="pts">38</div><div class="sub">38.0/gw</div></div></div><div class="row"><div class="rank">3</div><div class="who"><div class="team">Gunners</div><div class="mgr">Christopher Corbit &middot; 1-0-0</div></div><div class="val"><div class="pts">38</div><div class="sub">38.0/gw</div></div></div><div class="row"><div class="rank">5</div><div class="who"><div class="team">The Big Lewandowski</div><div class="mgr">Shashi Kambhampati &middot; 0-0-1</div></div><div class="val"><div class="pts">37</div><div class="sub">37.0/gw</div></div></div><div class="row"><div class="rank">5</div><div class="who"><div class="team">Geordie Generals</div><div class="mgr">Jamie Pickard &middot; 0-0-1</div></div><div class="val"><div class="pts">37</div><div class="sub">37.0/gw</div></div></div><div class="row"><div class="rank">5</div><div class="who"><div class="team">Team Vinnage</div><div class="mgr">Taylor Vinnage &middot; 1-0-0</div></div><div class="val"><div class="pts">37</div><div class="sub">37.0/gw</div></div></div><div class="row"><div class="rank">8</div><div class="who"><div class="team">Nott'm & Cheese</div><div class="mgr">Lara Thomas &middot; 0-0-1</div></div><div class="val"><div class="pts">36</div><div class="sub">36.0/gw</div></div></div></section><section class="card"><div class="head"><h2>Season record</h2><p>Best single gameweek</p></div><div class="rec"><div><span>Highest score</span><b>52</b><em>Nottinghamburglars &middot; GW1</em></div></div></section></div>
+  <div class="pane" data-pane="trends"><div class="picker"><select id="teampick"><option value="28070">Nottinghamburglars</option><option value="28073">Angry Dragons</option><option value="28075">Notty Neighbors</option><option value="28076">Gunners</option><option value="28074">The Big Lewandowski</option><option value="28077">Geordie Generals</option><option value="28071">Team Vinnage</option><option value="28072">Nott'm & Cheese</option></select></div><div class="picker"><select id="segpick"><option value="0" selected>Segment 1 &middot; GW1&ndash;10</option><option value="1">Segment 2 &middot; GW11&ndash;20</option><option value="2">Segment 3 &middot; GW21&ndash;30</option><option value="3">Segment 4 &middot; GW31&ndash;38</option></select></div><section class="card"><div class="head"><h2 id="charttitle">Scoring trend</h2><p id="chartsub">Weekly points</p></div><div id="chart"></div><div class="legend"><span><i class="k-line"></i>Weekly score</span><span><i class="k-me"></i>Their average</span><span><i class="k-lg"></i>League average</span></div></section><div class="rec2" id="chartstats"></div></div>
 
   <footer>Auto-updates daily &middot; data from the official FPL Draft API</footer>
 </div>
 
 <script>
 (function () {
+  var DATA = {"played": [1], "weekly": {"1": {"28075": 38, "28070": 52, "28076": 38, "28074": 37, "28077": 37, "28073": 42, "28071": 37, "28072": 36}}, "segments": [["Segment 1", 1, 10], ["Segment 2", 11, 20], ["Segment 3", 21, 30], ["Segment 4", 31, 38]], "names": {"28070": "Nottinghamburglars", "28071": "Team Vinnage", "28072": "Nott'm & Cheese", "28073": "Angry Dragons", "28074": "The Big Lewandowski", "28075": "Notty Neighbors", "28076": "Gunners", "28077": "Geordie Generals"}};
+
   var tabs = document.querySelectorAll('.tab');
   var panes = document.querySelectorAll('.pane');
+  var order = ['segments', 'gameweek', 'season', 'trends'];
 
   function show(name) {
-    tabs.forEach(function (t) {
-      t.classList.toggle('on', t.dataset.tab === name);
-    });
-    panes.forEach(function (p) {
-      p.classList.toggle('on', p.dataset.pane === name);
-    });
+    tabs.forEach(function (t) { t.classList.toggle('on', t.dataset.tab === name); });
+    panes.forEach(function (p) { p.classList.toggle('on', p.dataset.pane === name); });
     try { history.replaceState(null, '', '#' + name); } catch (e) {}
+    if (name === 'trends') draw();
     window.scrollTo(0, 0);
   }
-
   tabs.forEach(function (t) {
     t.addEventListener('click', function () { show(t.dataset.tab); });
   });
 
+  /* ---- gameweek picker ---- */
   var pick = document.getElementById('gwpick');
   if (pick) {
     var panels = document.querySelectorAll('.gwpanel');
@@ -213,8 +233,114 @@
     showGw(pick.value);
   }
 
+  /* ---- trends chart ---- */
+  var teamPick = document.getElementById('teampick');
+  var segPick = document.getElementById('segpick');
+  var host = document.getElementById('chart');
+  var stats = document.getElementById('chartstats');
+  var titleEl = document.getElementById('charttitle');
+  var subEl = document.getElementById('chartsub');
+
+  function mean(a) {
+    if (!a.length) return 0;
+    return a.reduce(function (x, y) { return x + y; }, 0) / a.length;
+  }
+
+  function draw() {
+    if (!host) return;
+    var team = teamPick.value;
+    var seg = DATA.segments[+segPick.value];
+    var gws = DATA.played.filter(function (g) { return g >= seg[1] && g <= seg[2]; });
+
+    titleEl.textContent = DATA.names[team];
+    subEl.textContent = seg[0] + ' · GW' + seg[1] + '–' + seg[2];
+
+    if (!gws.length) {
+      host.innerHTML = '<div class="empty">No gameweeks played in this segment yet</div>';
+      stats.innerHTML = '';
+      return;
+    }
+
+    var vals = gws.map(function (g) { return DATA.weekly[g][team]; });
+    var lgAll = [];
+    gws.forEach(function (g) {
+      var wk = DATA.weekly[g];
+      for (var k in wk) lgAll.push(wk[k]);
+    });
+    var myAvg = mean(vals), lgAvg = mean(lgAll);
+
+    var W = 420, H = 235, L = 34, R = 12, T = 16, B = 28;
+    var lo = Math.min.apply(null, vals.concat([myAvg, lgAvg]));
+    var hi = Math.max.apply(null, vals.concat([myAvg, lgAvg]));
+    var pad = Math.max(6, (hi - lo) * 0.25);
+    lo = Math.max(0, Math.floor((lo - pad) / 5) * 5);
+    hi = Math.ceil((hi + pad) / 5) * 5;
+    if (hi === lo) hi = lo + 10;
+
+    function X(i) {
+      return gws.length === 1 ? (L + (W - L - R) / 2)
+        : L + (W - L - R) * i / (gws.length - 1);
+    }
+    function Y(v) { return T + (H - T - B) * (1 - (v - lo) / (hi - lo)); }
+
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" class="chart">';
+
+    for (var t = 0; t <= 4; t++) {
+      var v = lo + (hi - lo) * t / 4, y = Y(v);
+      s += '<line x1="' + L + '" y1="' + y + '" x2="' + (W - R) + '" y2="' + y +
+           '" stroke="#232936" stroke-width="1"/>';
+      s += '<text x="' + (L - 7) + '" y="' + (y + 3.5) +
+           '" class="ax" text-anchor="end">' + Math.round(v) + '</text>';
+    }
+
+    s += '<line x1="' + L + '" y1="' + Y(lgAvg) + '" x2="' + (W - R) + '" y2="' +
+         Y(lgAvg) + '" stroke="#7d879b" stroke-width="1.6" stroke-dasharray="5 4"/>';
+    s += '<line x1="' + L + '" y1="' + Y(myAvg) + '" x2="' + (W - R) + '" y2="' +
+         Y(myAvg) + '" stroke="#f0b429" stroke-width="1.6" stroke-dasharray="5 4"/>';
+
+    if (gws.length > 1) {
+      var d = vals.map(function (v, i) {
+        return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1);
+      }).join(' ');
+      s += '<path d="' + d + '" fill="none" stroke="#e23539" stroke-width="2.6" ' +
+           'stroke-linejoin="round" stroke-linecap="round"/>';
+    }
+
+    vals.forEach(function (v, i) {
+      s += '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(v).toFixed(1) +
+           '" r="4" fill="#0b0d10" stroke="#e23539" stroke-width="2.4"/>';
+      s += '<text x="' + X(i).toFixed(1) + '" y="' + (Y(v) - 11).toFixed(1) +
+           '" class="pt" text-anchor="middle">' + v + '</text>';
+    });
+
+    var every = gws.length > 7 ? 2 : 1;
+    gws.forEach(function (g, i) {
+      if (i % every) return;
+      s += '<text x="' + X(i).toFixed(1) + '" y="' + (H - 9) +
+           '" class="ax" text-anchor="middle">' + g + '</text>';
+    });
+
+    s += '</svg>';
+    host.innerHTML = s;
+
+    var diff = myAvg - lgAvg;
+    var sign = diff >= 0 ? '+' : '';
+    stats.innerHTML =
+      '<div><span>Segment total</span><b>' +
+        vals.reduce(function (a, b) { return a + b; }, 0) +
+        '</b><em>' + gws.length + ' of ' + (seg[2] - seg[1] + 1) + ' GWs</em></div>' +
+      '<div><span>Vs league avg</span><b class="' +
+        (diff >= 0 ? 'up' : 'down') + '">' + sign + diff.toFixed(1) +
+        '</b><em>' + myAvg.toFixed(1) + ' v ' + lgAvg.toFixed(1) + '</em></div>';
+  }
+
+  if (teamPick) {
+    teamPick.addEventListener('change', draw);
+    segPick.addEventListener('change', draw);
+  }
+
   var start = (location.hash || '').replace('#', '');
-  show(['segments', 'gameweek', 'season'].indexOf(start) >= 0 ? start : 'segments');
+  show(order.indexOf(start) >= 0 ? start : 'segments');
 })();
 </script>
 
