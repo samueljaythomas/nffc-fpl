@@ -1,0 +1,17 @@
+{
+  "name": "NFFC FPL Scoreboard",
+  "short_name": "NFFC FPL",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0d10",
+  "theme_color": "#0b0d10",
+  "icons": [
+    {
+      "src": "IMG_8605.jpeg",
+      "sizes": "any",
+      "type": "image/jpeg"
+    }
+  ]
+}
