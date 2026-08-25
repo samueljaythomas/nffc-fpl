@@ -559,6 +559,25 @@ else:
     og_image = ""
     print(f"{CREST_FILE} not found - using built-in tree mark")
 
+APP_SHORT = os.environ.get("APP_SHORT", "NFFC FPL")
+app_short = APP_SHORT
+
+manifest = {
+    "name": f"{league_name} Scoreboard",
+    "short_name": APP_SHORT,
+    "start_url": "./index.html",
+    "scope": "./",
+    "display": "standalone",
+    "orientation": "portrait",
+    "background_color": "#0b0d10",
+    "theme_color": "#0b0d10",
+    "icons": [{"src": icon, "sizes": "any",
+               "type": "image/jpeg" if icon.lower().endswith((".jpg", ".jpeg"))
+               else "image/png"}] if os.path.exists(CREST_FILE) else [],
+}
+with open("manifest.json", "w", encoding="utf-8") as f:
+    json.dump(manifest, f, indent=2)
+
 SCRIPT = """
 <script>
 (function () {
@@ -729,6 +748,13 @@ SCRIPT = """
     segPick.addEventListener('change', draw);
   }
 
+  var reload = document.getElementById('reload');
+  if (reload) {
+    reload.addEventListener('click', function () {
+      location.replace(location.pathname + '?t=' + Date.now() + location.hash);
+    });
+  }
+
   var start = (location.hash || '').replace('#', '');
   show(order.indexOf(start) >= 0 ? start : 'segments');
 })();
@@ -743,6 +769,11 @@ html = f"""<!DOCTYPE html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{league_name} &middot; Scoreboard</title>
 <meta name="theme-color" content="#0b0d10">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="{app_short}">
+<link rel="manifest" href="manifest.json">
 <meta property="og:title" content="{league_name} &middot; Scoreboard">
 <meta property="og:description" content="{share_desc}">
 <meta property="og:type" content="website">
@@ -753,7 +784,9 @@ html = f"""<!DOCTYPE html>
 <style>
   * {{ box-sizing: border-box; }}
   body {{
-    margin: 0; padding: 22px 14px 46px;
+    margin: 0;
+    padding: calc(22px + env(safe-area-inset-top)) 14px
+             calc(46px + env(safe-area-inset-bottom)) 14px;
     background:
       radial-gradient(900px 380px at 50% -160px, #3a0a0e 0%, transparent 70%),
       #0b0d10;
@@ -771,8 +804,18 @@ html = f"""<!DOCTYPE html>
   .title {{
     font-size: 27px; font-weight: 800; letter-spacing: -.025em; line-height: 1;
   }}
-  .stamp {{ font-size: 12px; color: #8a93a6; margin: 10px 0 16px; }}
+  .stampbar {{
+    display: flex; align-items: center; gap: 10px; margin: 10px 0 16px;
+  }}
+  .stamp {{ font-size: 12px; color: #8a93a6; flex: 1; min-width: 0; }}
   .stamp b {{ color: #e23539; font-weight: 600; }}
+  .reload {{
+    flex: none; width: 30px; height: 30px; border-radius: 9px;
+    background: #14171d; border: 1px solid #262b36; color: #8a93a6;
+    font-size: 16px; line-height: 1; cursor: pointer; font-family: inherit;
+    -webkit-tap-highlight-color: transparent;
+  }}
+  .reload:active {{ color: #e23539; border-color: #e23539; }}
 
   .tabs {{
     display: flex; gap: 4px; background: #14171d; border: 1px solid #262b36;
@@ -962,7 +1005,10 @@ html = f"""<!DOCTYPE html>
 <div class="wrap">
   <div class="brand"><span class="mark">{mark}</span>
     <span class="title">{league_name}</span></div>
-  <div class="stamp">Consistency tracker &middot; updated <b>{updated}</b></div>
+  <div class="stampbar">
+    <div class="stamp">Consistency tracker &middot; updated <b>{updated}</b></div>
+    <button id="reload" class="reload" title="Reload">&#8635;</button>
+  </div>
 
   <div class="tabs">
     <button class="tab on" data-tab="segments">Segments</button>
