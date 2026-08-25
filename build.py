@@ -3,12 +3,13 @@
 Builds index.html - scoreboard page for a Draft FPL league.
 Run by GitHub Actions; served by GitHub Pages.
 
-Tabs: Segments, Gameweek, Season, Trends.
-Uses CREST_FILE from the repo root if present, else a built-in tree mark.
+Tabs: Segments, Gameweek, Season, Analysis, Trends.
+Everything is derived from one /league/{id}/details call.
 """
 
 import json
 import os
+import statistics
 from collections import defaultdict
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -52,8 +53,13 @@ managers = {e["id"]: f"{e['player_first_name']} {e['player_last_name']}"
 
 weekly = defaultdict(dict)          # gw -> {entry: points}
 fixtures = defaultdict(list)        # gw -> [(a, pa, b, pb, started, finished)]
+results = defaultdict(dict)         # gw -> {entry: 'W'|'D'|'L'}
+against = defaultdict(int)          # entry -> points conceded
+grid = defaultdict(lambda: defaultdict(int))   # a -> b -> wins over b
 finished = set()
 h2h = defaultdict(lambda: [0, 0, 0])
+decided = []                        # (margin, gw, winner, loser, pw, pl)
+drawn = []                          # (gw, a, b, pts)
 
 for m in details["matches"]:
     gw = m["event"]
@@ -66,20 +72,32 @@ for m in details["matches"]:
         continue
     weekly[gw][a] = pa
     weekly[gw][b] = pb
+    against[a] += pb
+    against[b] += pa
     if m.get("finished"):
         finished.add(gw)
+
     if pa > pb:
         h2h[a][0] += 1
         h2h[b][2] += 1
+        results[gw][a], results[gw][b] = "W", "L"
+        grid[a][b] += 1
+        decided.append((pa - pb, gw, a, b, pa, pb))
     elif pb > pa:
         h2h[b][0] += 1
         h2h[a][2] += 1
+        results[gw][a], results[gw][b] = "L", "W"
+        grid[b][a] += 1
+        decided.append((pb - pa, gw, b, a, pb, pa))
     else:
         h2h[a][1] += 1
         h2h[b][1] += 1
+        results[gw][a], results[gw][b] = "D", "D"
+        drawn.append((gw, a, b, pa))
 
 played = sorted(weekly)
 latest = max(played) if played else 0
+entries = list(names)
 all_scores = [p for gw in played for p in weekly[gw].values()]
 peak = max(all_scores) if all_scores else 1
 
@@ -93,16 +111,66 @@ def totals_for(start, end):
     return totals, gws
 
 
-def ranked(totals):
-    ordered = sorted(totals.items(), key=lambda kv: -kv[1])
-    out, last_pts, last_rank = [], None, 0
-    for i, (entry, pts) in enumerate(ordered, start=1):
-        rank = last_rank if pts == last_pts else i
-        out.append((rank, entry, pts))
-        last_pts, last_rank = pts, rank
+def ranked(totals, reverse=False):
+    ordered = sorted(totals.items(), key=lambda kv: kv[1] if reverse else -kv[1])
+    out, last_val, last_rank = [], None, 0
+    for i, (entry, val) in enumerate(ordered, start=1):
+        rank = last_rank if val == last_val else i
+        out.append((rank, entry, val))
+        last_val, last_rank = val, rank
     return out
 
 
+# ---------- derived season stats ----------
+allplay = defaultdict(lambda: [0, 0, 0])
+for gw in played:
+    scores = weekly[gw]
+    for entry, pts in scores.items():
+        for other, opts in scores.items():
+            if other == entry:
+                continue
+            if pts > opts:
+                allplay[entry][0] += 1
+            elif pts < opts:
+                allplay[entry][2] += 1
+            else:
+                allplay[entry][1] += 1
+
+allplay_pct, luck = {}, {}
+for entry in entries:
+    aw, ad, al = allplay[entry]
+    n = aw + ad + al
+    allplay_pct[entry] = (aw + 0.5 * ad) / n if n else 0
+    rw, rd, rl = h2h[entry]
+    rn = rw + rd + rl
+    real_pct = (rw + 0.5 * rd) / rn if rn else 0
+    luck[entry] = real_pct - allplay_pct[entry]
+
+spread = {}
+for entry in entries:
+    vals = [weekly[gw][entry] for gw in played if entry in weekly[gw]]
+    spread[entry] = statistics.pstdev(vals) if len(vals) > 1 else 0.0
+
+# streaks
+cur_streak, best_run = {}, {}
+for entry in entries:
+    seq = [results[gw].get(entry) for gw in played if entry in results[gw]]
+    run, kind, best = 0, None, 0
+    for res in seq:
+        if res == "W":
+            run = run + 1 if kind == "W" else 1
+            kind = "W"
+            best = max(best, run)
+        elif res == "L":
+            run = run + 1 if kind == "L" else 1
+            kind = "L"
+        else:
+            run, kind = 1, "D"
+    cur_streak[entry] = (kind, run) if seq else (None, 0)
+    best_run[entry] = best
+
+
+# ---------- row builders ----------
 def form_bars(entry, window=5):
     gws = played[-window:]
     if len(gws) < 2:
@@ -131,6 +199,23 @@ def rows_html(table, gw_count, sub_override=None, show_form=False):
             f'<div class="mgr">{meta}</div></div>'
             f'{form_bars(entry) if show_form else ""}'
             f'<div class="val"><div class="pts">{pts}</div>'
+            f'<div class="sub">{sub}</div></div>'
+            f'</div>'
+        )
+    return "".join(out)
+
+
+def custom_rows(items):
+    """items: list of (rank, entry, meta_html, value_html, sub_html)"""
+    out = []
+    for rank, entry, meta, val, sub in items:
+        lead = " lead" if rank == 1 else ""
+        out.append(
+            f'<div class="row{lead}">'
+            f'<div class="rank">{rank}</div>'
+            f'<div class="who"><div class="team">{names[entry]}</div>'
+            f'<div class="mgr">{meta}</div></div>'
+            f'<div class="val"><div class="pts">{val}</div>'
             f'<div class="sub">{sub}</div></div>'
             f'</div>'
         )
@@ -273,21 +358,135 @@ if played:
             f'<h2>Weekly high scores</h2><p>Times top of the pile</p></div>'
             f'{rows_html(ranked(top_weeks), 0, sub_override="weeks")}</section>')
 
+    tiles = []
     best_gw = max((p, e, gw) for gw in played for e, p in weekly[gw].items())
+    tiles.append(f'<div><span>Highest score</span><b>{best_gw[0]}</b>'
+                 f'<em>{names[best_gw[1]]} &middot; GW{best_gw[2]}</em></div>')
+
+    if decided:
+        mx = max(decided)
+        tiles.append(f'<div><span>Biggest win</span><b>+{mx[0]}</b>'
+                     f'<em>{names[mx[2]]} {mx[4]}&ndash;{mx[5]} '
+                     f'{names[mx[3]]} &middot; GW{mx[1]}</em></div>')
+        mn = min(decided)
+        tiles.append(f'<div><span>Closest match</span><b>+{mn[0]}</b>'
+                     f'<em>{names[mn[2]]} {mn[4]}&ndash;{mn[5]} '
+                     f'{names[mn[3]]} &middot; GW{mn[1]}</em></div>')
+    if drawn:
+        d = drawn[-1]
+        tiles.append(f'<div><span>Latest draw</span><b>{d[3]}</b>'
+                     f'<em>{names[d[1]]} v {names[d[2]]} &middot; GW{d[0]}</em></div>')
+
+    top_run = max(best_run.values()) if best_run else 0
+    if top_run > 1:
+        holders = " &amp; ".join(names[e] for e in entries if best_run[e] == top_run)
+        tiles.append(f'<div><span>Longest win run</span><b>{top_run}</b>'
+                     f'<em>{holders}</em></div>')
+
     season_blocks.append(
-        f'<section class="card"><div class="head"><h2>Season record</h2>'
-        f'<p>Best single gameweek</p></div>'
-        f'<div class="rec"><div><span>Highest score</span>'
-        f'<b>{best_gw[0]}</b>'
-        f'<em>{names[best_gw[1]]} &middot; GW{best_gw[2]}</em></div></div></section>')
+        f'<section class="card"><div class="head"><h2>Season records</h2>'
+        f'<p>Notable performances</p></div>'
+        f'<div class="tiles">{"".join(tiles)}</div></section>')
 else:
     season_blocks.append('<section class="card"><div class="head">'
                          '<h2>Season not started</h2></div></section>')
 
 
-# ================= TAB 4: TRENDS =================
-season_order = [e for r, e, p in ranked(totals_for(1, 38)[0])] if played \
-    else list(names)
+# ================= TAB 4: ANALYSIS =================
+ana_blocks = []
+if played:
+    ap_items = []
+    for rank, entry, pct in ranked(allplay_pct):
+        aw, ad, al = allplay[entry]
+        rw, rd, rl = h2h[entry]
+        lk = luck[entry]
+        cls = "up" if lk > 0.001 else ("down" if lk < -0.001 else "flat")
+        meta = (f'Table {rw}-{rd}-{rl} &middot; '
+                f'<b class="{cls}">luck {lk:+.2f}</b>')
+        ap_items.append((rank, entry, meta, f"{pct:.3f}".lstrip("0"),
+                         f"{aw}-{ad}-{al}"))
+    ana_blocks.append(
+        f'<section class="card"><div class="head">'
+        f'<h2>All-play table</h2><p>Scored against everyone, every week</p></div>'
+        f'{custom_rows(ap_items)}'
+        f'<div class="note">Win rate if you played all seven rivals each week. '
+        f'<b>Luck</b> is the gap between the real table and this one &mdash; '
+        f'green means the schedule has been kind.</div></section>')
+
+    pf_items = []
+    season_totals = totals_for(1, 38)[0]
+    for rank, entry, pa in ranked(against, reverse=True):
+        pf = season_totals[entry]
+        pf_items.append((rank, entry, f'Scored {pf}', str(pa), "conceded"))
+    ana_blocks.append(
+        f'<section class="card"><div class="head">'
+        f'<h2>Points against</h2><p>What opponents scored on you</p></div>'
+        f'{custom_rows(pf_items)}'
+        f'<div class="note">Sorted by lightest schedule first.</div></section>')
+
+    if len(played) > 2:
+        con_items = []
+        for rank, entry, sd in ranked(spread, reverse=True):
+            vals = [weekly[gw][entry] for gw in played if entry in weekly[gw]]
+            con_items.append((rank, entry,
+                              f'Range {min(vals)}&ndash;{max(vals)}',
+                              f"{sd:.1f}", "std dev"))
+        ana_blocks.append(
+            f'<section class="card"><div class="head">'
+            f'<h2>Consistency</h2><p>Lower is steadier</p></div>'
+            f'{custom_rows(con_items)}'
+            f'<div class="note">Standard deviation of weekly scores. '
+            f'A low number means predictable output week to week &mdash; '
+            f'which is what the segment awards are really rewarding.</div></section>')
+
+    st_items = []
+    order = sorted(entries, key=lambda e: (
+        0 if cur_streak[e][0] == "W" else (1 if cur_streak[e][0] == "D" else 2),
+        -cur_streak[e][1]))
+    for i, entry in enumerate(order, start=1):
+        kind, run = cur_streak[entry]
+        cls = "up" if kind == "W" else ("down" if kind == "L" else "flat")
+        label = f'{kind}{run}' if kind else "&ndash;"
+        st_items.append((i, entry, f'Best run {best_run[entry]}W',
+                         f'<span class="{cls}">{label}</span>', "current"))
+    ana_blocks.append(
+        f'<section class="card"><div class="head">'
+        f'<h2>Form streaks</h2><p>Current run of results</p></div>'
+        f'{custom_rows(st_items)}</section>')
+
+    # head-to-head grid
+    idx = {e: i + 1 for i, e in enumerate(entries)}
+    head = "".join(f'<th>{idx[e]}</th>' for e in entries)
+    body = ""
+    for a in entries:
+        cells = ""
+        for b in entries:
+            if a == b:
+                cells += '<td class="self">&middot;</td>'
+                continue
+            w, l = grid[a][b], grid[b][a]
+            if w == 0 and l == 0:
+                cells += '<td class="nil">&ndash;</td>'
+            else:
+                cls = "up" if w > l else ("down" if l > w else "flat")
+                cells += f'<td class="{cls}">{w}</td>'
+        body += (f'<tr><th class="rowlab">'
+                 f'<span class="n">{idx[a]}</span>{names[a]}</th>{cells}</tr>')
+    ana_blocks.append(
+        f'<section class="card"><div class="head">'
+        f'<h2>Head to head</h2><p>Wins against each rival</p></div>'
+        f'<div class="gridwrap"><table class="h2h">'
+        f'<tr><th class="rowlab"></th>{head}</tr>{body}</table></div>'
+        f'<div class="note">Read across: the number is that row\'s wins over '
+        f'the numbered column.</div></section>')
+else:
+    ana_blocks.append('<section class="card"><div class="head">'
+                      '<h2>Nothing to analyse yet</h2>'
+                      '<p>Check back after GW1</p></div></section>')
+
+
+# ================= TAB 5: TRENDS =================
+season_order = [e for r, e, p in ranked(totals_for(1, 38)[0])] if played else entries
 team_options = "".join(f'<option value="{e}">{names[e]}</option>'
                        for e in season_order)
 seg_options = "".join(
@@ -367,7 +566,7 @@ SCRIPT = """
 
   var tabs = document.querySelectorAll('.tab');
   var panes = document.querySelectorAll('.pane');
-  var order = ['segments', 'gameweek', 'season', 'trends'];
+  var order = ['segments', 'gameweek', 'season', 'analysis', 'trends'];
 
   function show(name) {
     tabs.forEach(function (t) { t.classList.toggle('on', t.dataset.tab === name); });
@@ -578,10 +777,13 @@ html = f"""<!DOCTYPE html>
   .tabs {{
     display: flex; gap: 4px; background: #14171d; border: 1px solid #262b36;
     border-radius: 12px; padding: 4px; margin-bottom: 16px;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
   }}
+  .tabs::-webkit-scrollbar {{ display: none; }}
   .tab {{
-    flex: 1; text-align: center; padding: 9px 2px; border-radius: 9px;
-    font-size: 12.5px; font-weight: 600; color: #8a93a6;
+    flex: 1 0 auto; text-align: center; padding: 9px 11px; border-radius: 9px;
+    font-size: 12.5px; font-weight: 600; color: #8a93a6; white-space: nowrap;
     border: none; background: none; cursor: pointer; font-family: inherit;
     -webkit-tap-highlight-color: transparent;
   }}
@@ -641,7 +843,11 @@ html = f"""<!DOCTYPE html>
     font-size: 14.5px; font-weight: 600;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }}
-  .mgr {{ font-size: 11px; color: #8a93a6; margin-top: 1px; }}
+  .mgr {{
+    font-size: 11px; color: #8a93a6; margin-top: 1px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }}
+  .mgr b {{ font-weight: 600; }}
   .form {{ display: flex; align-items: flex-end; gap: 2px; height: 26px; }}
   .form i {{ width: 5px; background: #3d4553; border-radius: 1.5px; }}
   .row.lead .form i {{ background: #7a2c30; }}
@@ -649,6 +855,9 @@ html = f"""<!DOCTYPE html>
   .val {{ text-align: right; min-width: 46px; }}
   .pts {{ font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; }}
   .sub {{ font-size: 10px; color: #8a93a6; }}
+  .up {{ color: #37d67a; }}
+  .down {{ color: #e23539; }}
+  .flat {{ color: #8a93a6; }}
 
   .fx {{
     display: flex; align-items: center; gap: 8px;
@@ -670,6 +879,26 @@ html = f"""<!DOCTYPE html>
   .vs {{ font-size: 11px; color: #4e576b; flex: none; }}
   .fx.up .side span {{ color: #c6cddb; }}
 
+  .gridwrap {{ overflow-x: auto; -webkit-overflow-scrolling: touch; }}
+  table.h2h {{ border-collapse: collapse; width: 100%; font-size: 12px; }}
+  table.h2h th, table.h2h td {{
+    padding: 7px 2px; text-align: center; border-bottom: 1px solid #1e222b;
+    font-weight: 600;
+  }}
+  table.h2h th {{ color: #8a93a6; font-size: 11px; }}
+  table.h2h .rowlab {{
+    text-align: left; padding-left: 15px; padding-right: 8px;
+    color: #f4f6f9; font-size: 12px; font-weight: 600;
+    max-width: 132px; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis;
+  }}
+  table.h2h .rowlab .n {{
+    display: inline-block; width: 15px; color: #8a93a6; font-weight: 700;
+  }}
+  table.h2h td.self {{ color: #333a48; }}
+  table.h2h td.nil {{ color: #3d4553; }}
+  table.h2h tr:last-child th, table.h2h tr:last-child td {{ border-bottom: none; }}
+
   .chart {{ display: block; width: 100%; height: auto; padding: 6px 4px 0; }}
   .chart .ax {{ fill: #7d879b; font-size: 10px;
     font-family: -apple-system, sans-serif; }}
@@ -688,14 +917,22 @@ html = f"""<!DOCTYPE html>
   .k-me {{ border-top: 2.5px dashed #f0b429; }}
   .k-lg {{ border-top: 2.5px dashed #7d879b; }}
 
-  .rec {{ display: flex; }}
-  .rec > div {{ flex: 1; padding: 14px 17px; }}
-  .rec span {{
-    display: block; font-size: 10px; letter-spacing: .08em;
+  .tiles {{ display: flex; flex-wrap: wrap; }}
+  .tiles > div {{
+    flex: 1 1 50%; min-width: 50%; padding: 13px 17px;
+    border-bottom: 1px solid #1e222b;
+  }}
+  .tiles > div:nth-child(odd) {{ border-right: 1px solid #1e222b; }}
+  .tiles span {{
+    display: block; font-size: 9.5px; letter-spacing: .08em;
     text-transform: uppercase; color: #8a93a6;
   }}
-  .rec b {{ display: block; font-size: 26px; font-weight: 800; margin: 3px 0 2px; }}
-  .rec em {{ font-style: normal; font-size: 11px; color: #8a93a6; }}
+  .tiles b {{ display: block; font-size: 24px; font-weight: 800; margin: 3px 0 2px; }}
+  .tiles em {{
+    font-style: normal; font-size: 10.5px; color: #8a93a6; line-height: 1.35;
+    display: block;
+  }}
+
   .rec2 {{ display: flex; gap: 12px; margin-bottom: 15px; }}
   .rec2 > div {{
     flex: 1; background: #14171d; border: 1px solid #262b36;
@@ -713,8 +950,10 @@ html = f"""<!DOCTYPE html>
     display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }}
 
-  .note {{ padding: 11px 17px; font-size: 12px; color: #8a93a6; }}
+  .note {{ padding: 11px 17px; font-size: 11.5px; color: #8a93a6; line-height: 1.45;
+    border-top: 1px solid #1e222b; }}
   .note b {{ color: #f4f6f9; }}
+  .note b.up {{ color: #37d67a; }}
   .note.warn {{ color: #f0b429; }}
   footer {{ text-align: center; font-size: 11px; color: #4e576b; margin-top: 26px; }}
 </style>
@@ -729,12 +968,14 @@ html = f"""<!DOCTYPE html>
     <button class="tab on" data-tab="segments">Segments</button>
     <button class="tab" data-tab="gameweek">Gameweek</button>
     <button class="tab" data-tab="season">Season</button>
+    <button class="tab" data-tab="analysis">Analysis</button>
     <button class="tab" data-tab="trends">Trends</button>
   </div>
 
   <div class="pane on" data-pane="segments">{''.join(seg_blocks)}</div>
   <div class="pane" data-pane="gameweek">{gw_tab}</div>
   <div class="pane" data-pane="season">{''.join(season_blocks)}</div>
+  <div class="pane" data-pane="analysis">{''.join(ana_blocks)}</div>
   <div class="pane" data-pane="trends">{trends_tab}</div>
 
   <footer>Auto-updates daily &middot; data from the official FPL Draft API</footer>
