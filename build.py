@@ -3,10 +3,11 @@
 Builds index.html - scoreboard page for a Draft FPL league.
 Run by GitHub Actions; served by GitHub Pages.
 
-Three tabs: Segments, Gameweek (with a picker), Season.
+Tabs: Segments, Gameweek, Season, Trends.
 Uses CREST_FILE from the repo root if present, else a built-in tree mark.
 """
 
+import json
 import os
 from collections import defaultdict
 from datetime import datetime
@@ -218,7 +219,7 @@ for gw in selectable:
                 f'<span class="badge muted">UPCOMING</span>'
                 f'<h2>Gameweek {gw}</h2><p>Fixtures</p></div>{fx}</section>')
     else:
-        scores = ranked({e: p for e, p in weekly[gw].items()})
+        scores = ranked(dict(weekly[gw]))
         top = scores[0][2]
         winners = " &amp; ".join(names[e] for r, e, p in scores if r == 1)
         note = ""
@@ -284,6 +285,40 @@ else:
                          '<h2>Season not started</h2></div></section>')
 
 
+# ================= TAB 4: TRENDS =================
+season_order = [e for r, e, p in ranked(totals_for(1, 38)[0])] if played \
+    else list(names)
+team_options = "".join(f'<option value="{e}">{names[e]}</option>'
+                       for e in season_order)
+seg_options = "".join(
+    f'<option value="{i}"{" selected" if current and SEGMENTS[i] is current else ""}>'
+    f'{lab} &middot; GW{s}&ndash;{en}</option>'
+    for i, (lab, s, en) in enumerate(SEGMENTS)
+)
+
+trends_tab = (
+    f'<div class="picker"><select id="teampick">{team_options}</select></div>'
+    f'<div class="picker"><select id="segpick">{seg_options}</select></div>'
+    f'<section class="card"><div class="head">'
+    f'<h2 id="charttitle">Scoring trend</h2>'
+    f'<p id="chartsub">Weekly points</p></div>'
+    f'<div id="chart"></div>'
+    f'<div class="legend">'
+    f'<span><i class="k-line"></i>Weekly score</span>'
+    f'<span><i class="k-me"></i>Their average</span>'
+    f'<span><i class="k-lg"></i>League average</span>'
+    f'</div></section>'
+    f'<div class="rec2" id="chartstats"></div>'
+)
+
+CHART_DATA = {
+    "played": played,
+    "weekly": {str(gw): {str(e): p for e, p in weekly[gw].items()} for gw in played},
+    "segments": [[lab, s, e] for lab, s, e in SEGMENTS],
+    "names": {str(e): names[e] for e in names},
+}
+
+
 # ================= PAGE =================
 updated = datetime.now(TZ).strftime("%a %d %b, %I:%M %p").replace(" 0", " ")
 leader = ranked(totals_for(1, 38)[0])[0] if played else None
@@ -320,24 +355,24 @@ else:
 SCRIPT = """
 <script>
 (function () {
+  var DATA = __CHART_DATA__;
+
   var tabs = document.querySelectorAll('.tab');
   var panes = document.querySelectorAll('.pane');
+  var order = ['segments', 'gameweek', 'season', 'trends'];
 
   function show(name) {
-    tabs.forEach(function (t) {
-      t.classList.toggle('on', t.dataset.tab === name);
-    });
-    panes.forEach(function (p) {
-      p.classList.toggle('on', p.dataset.pane === name);
-    });
+    tabs.forEach(function (t) { t.classList.toggle('on', t.dataset.tab === name); });
+    panes.forEach(function (p) { p.classList.toggle('on', p.dataset.pane === name); });
     try { history.replaceState(null, '', '#' + name); } catch (e) {}
+    if (name === 'trends') draw();
     window.scrollTo(0, 0);
   }
-
   tabs.forEach(function (t) {
     t.addEventListener('click', function () { show(t.dataset.tab); });
   });
 
+  /* ---- gameweek picker ---- */
   var pick = document.getElementById('gwpick');
   if (pick) {
     var panels = document.querySelectorAll('.gwpanel');
@@ -350,11 +385,118 @@ SCRIPT = """
     showGw(pick.value);
   }
 
+  /* ---- trends chart ---- */
+  var teamPick = document.getElementById('teampick');
+  var segPick = document.getElementById('segpick');
+  var host = document.getElementById('chart');
+  var stats = document.getElementById('chartstats');
+  var titleEl = document.getElementById('charttitle');
+  var subEl = document.getElementById('chartsub');
+
+  function mean(a) {
+    if (!a.length) return 0;
+    return a.reduce(function (x, y) { return x + y; }, 0) / a.length;
+  }
+
+  function draw() {
+    if (!host) return;
+    var team = teamPick.value;
+    var seg = DATA.segments[+segPick.value];
+    var gws = DATA.played.filter(function (g) { return g >= seg[1] && g <= seg[2]; });
+
+    titleEl.textContent = DATA.names[team];
+    subEl.textContent = seg[0] + ' \u00b7 GW' + seg[1] + '\u2013' + seg[2];
+
+    if (!gws.length) {
+      host.innerHTML = '<div class="empty">No gameweeks played in this segment yet</div>';
+      stats.innerHTML = '';
+      return;
+    }
+
+    var vals = gws.map(function (g) { return DATA.weekly[g][team]; });
+    var lgAll = [];
+    gws.forEach(function (g) {
+      var wk = DATA.weekly[g];
+      for (var k in wk) lgAll.push(wk[k]);
+    });
+    var myAvg = mean(vals), lgAvg = mean(lgAll);
+
+    var W = 420, H = 235, L = 34, R = 12, T = 16, B = 28;
+    var lo = Math.min.apply(null, vals.concat([myAvg, lgAvg]));
+    var hi = Math.max.apply(null, vals.concat([myAvg, lgAvg]));
+    var pad = Math.max(6, (hi - lo) * 0.25);
+    lo = Math.max(0, Math.floor((lo - pad) / 5) * 5);
+    hi = Math.ceil((hi + pad) / 5) * 5;
+    if (hi === lo) hi = lo + 10;
+
+    function X(i) {
+      return gws.length === 1 ? (L + (W - L - R) / 2)
+        : L + (W - L - R) * i / (gws.length - 1);
+    }
+    function Y(v) { return T + (H - T - B) * (1 - (v - lo) / (hi - lo)); }
+
+    var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" class="chart">';
+
+    for (var t = 0; t <= 4; t++) {
+      var v = lo + (hi - lo) * t / 4, y = Y(v);
+      s += '<line x1="' + L + '" y1="' + y + '" x2="' + (W - R) + '" y2="' + y +
+           '" stroke="#232936" stroke-width="1"/>';
+      s += '<text x="' + (L - 7) + '" y="' + (y + 3.5) +
+           '" class="ax" text-anchor="end">' + Math.round(v) + '</text>';
+    }
+
+    s += '<line x1="' + L + '" y1="' + Y(lgAvg) + '" x2="' + (W - R) + '" y2="' +
+         Y(lgAvg) + '" stroke="#7d879b" stroke-width="1.6" stroke-dasharray="5 4"/>';
+    s += '<line x1="' + L + '" y1="' + Y(myAvg) + '" x2="' + (W - R) + '" y2="' +
+         Y(myAvg) + '" stroke="#f0b429" stroke-width="1.6" stroke-dasharray="5 4"/>';
+
+    if (gws.length > 1) {
+      var d = vals.map(function (v, i) {
+        return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1);
+      }).join(' ');
+      s += '<path d="' + d + '" fill="none" stroke="#e23539" stroke-width="2.6" ' +
+           'stroke-linejoin="round" stroke-linecap="round"/>';
+    }
+
+    vals.forEach(function (v, i) {
+      s += '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(v).toFixed(1) +
+           '" r="4" fill="#0b0d10" stroke="#e23539" stroke-width="2.4"/>';
+      s += '<text x="' + X(i).toFixed(1) + '" y="' + (Y(v) - 11).toFixed(1) +
+           '" class="pt" text-anchor="middle">' + v + '</text>';
+    });
+
+    var every = gws.length > 7 ? 2 : 1;
+    gws.forEach(function (g, i) {
+      if (i % every) return;
+      s += '<text x="' + X(i).toFixed(1) + '" y="' + (H - 9) +
+           '" class="ax" text-anchor="middle">' + g + '</text>';
+    });
+
+    s += '</svg>';
+    host.innerHTML = s;
+
+    var diff = myAvg - lgAvg;
+    var sign = diff >= 0 ? '+' : '';
+    stats.innerHTML =
+      '<div><span>Segment total</span><b>' +
+        vals.reduce(function (a, b) { return a + b; }, 0) +
+        '</b><em>' + gws.length + ' of ' + (seg[2] - seg[1] + 1) + ' GWs</em></div>' +
+      '<div><span>Vs league avg</span><b class="' +
+        (diff >= 0 ? 'up' : 'down') + '">' + sign + diff.toFixed(1) +
+        '</b><em>' + myAvg.toFixed(1) + ' v ' + lgAvg.toFixed(1) + '</em></div>';
+  }
+
+  if (teamPick) {
+    teamPick.addEventListener('change', draw);
+    segPick.addEventListener('change', draw);
+  }
+
   var start = (location.hash || '').replace('#', '');
-  show(['segments', 'gameweek', 'season'].indexOf(start) >= 0 ? start : 'segments');
+  show(order.indexOf(start) >= 0 ? start : 'segments');
 })();
 </script>
 """
+SCRIPT = SCRIPT.replace("__CHART_DATA__", json.dumps(CHART_DATA))
 
 html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -395,12 +537,12 @@ html = f"""<!DOCTYPE html>
   .stamp b {{ color: #e23539; font-weight: 600; }}
 
   .tabs {{
-    display: flex; gap: 5px; background: #14171d; border: 1px solid #262b36;
+    display: flex; gap: 4px; background: #14171d; border: 1px solid #262b36;
     border-radius: 12px; padding: 4px; margin-bottom: 16px;
   }}
   .tab {{
-    flex: 1; text-align: center; padding: 9px 4px; border-radius: 9px;
-    font-size: 13px; font-weight: 600; color: #8a93a6;
+    flex: 1; text-align: center; padding: 9px 2px; border-radius: 9px;
+    font-size: 12.5px; font-weight: 600; color: #8a93a6;
     border: none; background: none; cursor: pointer; font-family: inherit;
     -webkit-tap-highlight-color: transparent;
   }}
@@ -408,14 +550,14 @@ html = f"""<!DOCTYPE html>
   .pane {{ display: none; }}
   .pane.on {{ display: block; }}
 
-  .picker {{ position: relative; margin-bottom: 14px; }}
+  .picker {{ position: relative; margin-bottom: 11px; }}
   .picker::after {{
     content: ""; position: absolute; right: 16px; top: 50%;
     width: 8px; height: 8px; border-right: 2px solid #8a93a6;
     border-bottom: 2px solid #8a93a6; transform: translateY(-70%) rotate(45deg);
     pointer-events: none;
   }}
-  #gwpick {{
+  .picker select {{
     width: 100%; appearance: none; -webkit-appearance: none;
     background: #14171d; border: 1px solid #262b36; border-radius: 12px;
     color: #f4f6f9; font-size: 15px; font-weight: 600; font-family: inherit;
@@ -474,9 +616,7 @@ html = f"""<!DOCTYPE html>
     padding: 13px 15px; border-bottom: 1px solid #1e222b;
   }}
   .fx:last-of-type {{ border-bottom: none; }}
-  .side {{
-    flex: 1; display: flex; align-items: center; gap: 9px; min-width: 0;
-  }}
+  .side {{ flex: 1; display: flex; align-items: center; gap: 9px; min-width: 0; }}
   .side.r {{ justify-content: flex-end; }}
   .side span {{
     font-size: 13.5px; color: #8a93a6;
@@ -490,6 +630,24 @@ html = f"""<!DOCTYPE html>
   .side.win b {{ color: #e23539; }}
   .vs {{ font-size: 11px; color: #4e576b; flex: none; }}
   .fx.up .side span {{ color: #c6cddb; }}
+
+  .chart {{ display: block; width: 100%; height: auto; padding: 6px 4px 0; }}
+  .chart .ax {{ fill: #7d879b; font-size: 10px;
+    font-family: -apple-system, sans-serif; }}
+  .chart .pt {{ fill: #f4f6f9; font-size: 10.5px; font-weight: 700;
+    font-family: -apple-system, sans-serif; }}
+  .empty {{ padding: 34px 18px; text-align: center; font-size: 13px; color: #8a93a6; }}
+  .legend {{
+    display: flex; flex-wrap: wrap; gap: 14px;
+    padding: 10px 17px 14px; border-top: 1px solid #262b36;
+  }}
+  .legend span {{
+    display: flex; align-items: center; gap: 6px; font-size: 11px; color: #8a93a6;
+  }}
+  .legend i {{ display: block; width: 16px; height: 0; border-top-width: 2.5px; }}
+  .k-line {{ border-top: 2.5px solid #e23539; }}
+  .k-me {{ border-top: 2.5px dashed #f0b429; }}
+  .k-lg {{ border-top: 2.5px dashed #7d879b; }}
 
   .rec {{ display: flex; }}
   .rec > div {{ flex: 1; padding: 14px 17px; }}
@@ -509,6 +667,8 @@ html = f"""<!DOCTYPE html>
     text-transform: uppercase; color: #8a93a6;
   }}
   .rec2 b {{ display: block; font-size: 24px; font-weight: 800; margin: 3px 0 2px; }}
+  .rec2 b.up {{ color: #37d67a; }}
+  .rec2 b.down {{ color: #e23539; }}
   .rec2 em {{
     font-style: normal; font-size: 11px; color: #8a93a6;
     display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -530,11 +690,13 @@ html = f"""<!DOCTYPE html>
     <button class="tab on" data-tab="segments">Segments</button>
     <button class="tab" data-tab="gameweek">Gameweek</button>
     <button class="tab" data-tab="season">Season</button>
+    <button class="tab" data-tab="trends">Trends</button>
   </div>
 
   <div class="pane on" data-pane="segments">{''.join(seg_blocks)}</div>
   <div class="pane" data-pane="gameweek">{gw_tab}</div>
   <div class="pane" data-pane="season">{''.join(season_blocks)}</div>
+  <div class="pane" data-pane="trends">{trends_tab}</div>
 
   <footer>Auto-updates daily &middot; data from the official FPL Draft API</footer>
 </div>
